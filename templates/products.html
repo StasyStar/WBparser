@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <!-- Графики -->
+    <div class="col-md-6">
+        <div class="card chart-container mb-4">
+            <div class="card-header">
+                <h5>Распределение цен</h5>
+            </div>
+            <div class="card-body">
+                {% if price_histogram %}
+                    <img src="data:image/png;base64,{{ price_histogram }}" class="img-fluid">
+                {% else %}
+                    <p class="text-muted">Нет данных для отображения</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card chart-container mb-4">
+            <div class="card-header">
+                <h5>Скидка vs Рейтинг</h5>
+            </div>
+            <div class="card-body">
+                {% if discount_rating_chart %}
+                    <img src="data:image/png;base64,{{ discount_rating_chart }}" class="img-fluid">
+                {% else %}
+                    <p class="text-muted">Нет данных для отображения</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if messages %}
+    <div class="alert alert-info">
+        {% for message in messages %}{{ message }}{% endfor %}
+        <p>Пожалуйста, обновите страницу через 1-2 минуты.</p>
+    </div>
+{% endif %}
+
+<div class="row">
+    <!-- Фильтры -->
+    <div class="col-md-3">
+        <div class="card filter-card">
+            <div class="card-header">
+                <h5>Фильтры</h5>
+            </div>
+            <div class="card-body">
+                <form method="get" id="filter-form">
+                    <div class="mb-3">
+                        <label class="form-label">Категория</label>
+                        <select name="category" class="form-select">
+                            <option value="">Все категории</option>
+                            {% for category in categories %}
+                                <option value="{{ category.id }}" {% if current_category == category.id %}selected{% endif %}>{{ category.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Сортировка</label>
+                        <select name="sort" class="form-select">
+                            <option value="-created_at" {% if sort == '-created_at' %}selected{% endif %}>Новые сначала</option>
+                            <option value="price" {% if sort == 'price' %}selected{% endif %}>Цена по возрастанию</option>
+                            <option value="-price" {% if sort == '-price' %}selected{% endif %}>Цена по убыванию</option>
+                            <option value="-rating" {% if sort == '-rating' %}selected{% endif %}>Высокий рейтинг</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Цена (₽)</label>
+                        <div id="price-slider"></div>
+                        <div class="d-flex justify-content-between mt-2">
+                            <input type="number" id="price-from" name="price_from" class="form-control" style="width: 48%;" min="{{ min_price }}" max="{{ max_price }}" value="{{ price_from }}">
+                            <input type="number" id="price-to" name="price_to" class="form-control" style="width: 48%;" min="{{ min_price }}" max="{{ max_price }}" value="{{ price_to }}">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" title="Минимальный рейтинг от 1 до 5">Мин. рейтинг</label>
+                        <input type="number" name="min_rating" class="form-control" placeholder="например, 4.0" step="0.1" min="0" max="5" value="{{ min_rating }}">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" title="Товары с количеством отзывов не меньше указанного">Мин. отзывы</label>
+                        <input type="number" name="min_reviews" class="form-control" placeholder="например, 100" min="0" value="{{ min_reviews }}">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100">Применить</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Товары -->
+    <div class="col-md-9">
+        <div class="card">
+            <div class="card-header">
+                <h5>Товары ({{ products.paginator.count }})</h5>
+            </div>
+            <div class="card-body">
+                {% if products %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Название</th>
+                                    <th>Цена</th>
+                                    <th>Цена со скидкой</th>
+                                    <th>Рейтинг</th>
+                                    <th>Отзывы</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for product in products %}
+                                    <tr>
+                                        <td>
+                                            <a href="{{ product.url }}" target="_blank">{{ product.name }}</a><br>
+                                            <small class="text-muted">{{ product.brand }}</small>
+                                        </td>
+                                        <td>{{ product.get_price }}</td>
+                                        <td>
+                                            {{ product.get_discounted_price }}
+                                            {% if product.get_discount %}
+                                                <span class="badge bg-danger">{{ product.get_discount }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{% if product.rating %}{{ product.rating }} ★{% else %}Нет рейтинга{% endif %}</td>
+                                        <td>{{ product.reviews_count }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {% if products.has_other_pages %}
+                        <nav class="mt-4">
+                            <ul class="pagination">
+                                {% if products.has_previous %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page=1&category={{ current_category }}&sort={{ sort }}">Первая</a>
+                                    </li>
+                                {% endif %}
+
+                                {% for num in products.paginator.page_range %}
+                                    {% if products.number == num %}
+                                        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                                    {% else %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page={{ num }}&category={{ current_category }}&sort={{ sort }}">{{ num }}</a>
+                                        </li>
+                                    {% endif %}
+                                {% endfor %}
+
+                                {% if products.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ products.paginator.num_pages }}&category={{ current_category }}&sort={{ sort }}">Последняя</a>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                    {% endif %}
+                {% else %}
+                    <div class="alert alert-info">Нет товаров по выбранным критериям. Попробуйте изменить фильтры.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var priceSlider = document.getElementById('price-slider');
+    var inputFrom = document.getElementById('price-from');
+    var inputTo = document.getElementById('price-to');
+
+    noUiSlider.create(priceSlider, {
+        start: [{{ price_from|default:min_price }}, {{ price_to|default:max_price }}],
+        connect: true,
+        step: 100,
+        range: {
+            'min': {{ min_price }},
+            'max': {{ max_price }}
+        },
+        format: {
+            to: function(value) {
+                return Math.round(value);
+            },
+            from: function(value) {
+                return Number(value);
+            }
+        }
+    });
+
+    priceSlider.noUiSlider.on('update', function (values, handle) {
+        if (handle === 0) {
+            inputFrom.value = values[0];
+        } else {
+            inputTo.value = values[1];
+        }
+    });
+
+    inputFrom.addEventListener('change', function () {
+        priceSlider.noUiSlider.set([this.value, null]);
+    });
+
+    inputTo.addEventListener('change', function () {
+        priceSlider.noUiSlider.set([null, this.value]);
+    });
+});
+</script>
+{% endblock %}
